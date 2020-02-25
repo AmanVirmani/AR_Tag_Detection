@@ -4,7 +4,7 @@ from collections import deque
 
 #Finding the Homography of the AR tag from World Coordinate frame to Image Coordinate frame
 def find_homography(source_pts, target_pts):
-	combined_pts = np.hstack((source_pts,target_pts))
+	combined_pts = np.hstack((order_points(source_pts),order_points(target_pts)))
 	A = []
 
 	for pts in combined_pts:
@@ -113,9 +113,22 @@ def image_overlay(frame,pts) :
 	#pts2 = np.float32(order_points(squares[0].reshape((4,2))))
 	pts2 = np.float32(order_points(pts))
 	M = cv2.getPerspectiveTransform(pts1,pts2)
+	#dst = warpPerspective(lena,M,(frame.shape[1],frame.shape[0]))
+	#cv2.imshow('dst',dst)
+	#cv2.waitKey(0)
 	dst = cv2.warpPerspective(lena,M,(frame.shape[1],frame.shape[0]))
 	overlay = cv2.add(frame,dst)
 	cv2.imshow('finally',overlay)
+	cv2.waitKey(0)
+
+def warpPerspective(src,M,dim) :
+	for col in range(dim[1]):
+		for row in range(dim[0]):
+			for ch in range(src.shape[2]):
+				[a,b,c] = np.matmul(M,[row,col,1])
+				dst[row,col,ch] = src[int(a/c),int(b/c),ch]
+
+	cv2.imshow('dst',dst)
 	cv2.waitKey(0)
 
 if __name__=='__main__':
@@ -154,8 +167,7 @@ if __name__=='__main__':
 			cv2.waitKey(0)
 			image_overlay(frame, squares[0].reshape((4,2)))
 
-			#H = find_homography(order_points(squares[0]), [[0,0],[199,0],[0,199],[199,199]] )
-			#H = find_homography(squares[0].reshape((4,2)), [[0,0],[199,0],[0,199],[199,199]] )
+			H = find_homography(squares[0].reshape((4,2)), np.array([[0,0],[199,0],[0,199],[199,199]]))
 			#warped = cv2.warpPerspective(gray_frame,H,(200,200))
 			#H_inv = np.linalg.inv(H)
 			#im_out=np.zeros((200,200))
