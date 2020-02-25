@@ -8,10 +8,10 @@ def find_homography(source_pts, target_pts):
 	A = []
 
 	for pts in combined_pts:
-		x_s = pts[0]
-		y_s = pts[1]
-		x_t = pts[2]
-		y_t = pts[3]
+		x_t = pts[0]
+		y_t = pts[1]
+		x_s = pts[2]
+		y_s = pts[3]
 
 		A_first_row = [x_t,y_t,1,0,0,0,-x_s*x_t,-x_s*y_t,-x_s]
 		A_second_row = [0,0,0,x_t,y_t,1,-y_s*x_t,-y_s*y_t,-y_s]
@@ -126,6 +126,31 @@ def image_overlay(frame,pts,angle) :
 	overlay = cv2.add(frame,dst)
 	return overlay
 
+def superimpose():
+	frame = cv2.imread('test_frame.jpg')
+	gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+	gray = cv2.bilateralFilter(gray_frame, 15, 75, 75)
+	ret, gray = cv2.threshold(gray_frame, 200, 255, 0)
+	cnts, _ = cv2.findContours(gray.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+	cnts = sorted(cnts, key=cv2.contourArea,reverse=True)
+	squares=[]
+	for cnt in cnts:
+		cnt_len = cv2.arcLength(cnt, True)
+		cnt = cv2.approxPolyDP(cnt, 0.1*cnt_len, True)
+		if len(cnt) == 4:
+			if 2000 < cv2.contourArea(cnt) < 17500:
+				squares.append(cnt)
+
+	print(squares)
+	std_size = 200
+	for pts in squares:
+		src_pts = order_points(pts.reshape((4,2)))
+		tgt_pts = order_points(np.array([[0,0],[0,std_size],[std_size,std_size],[std_size,0]]))
+		H = find_homography(src_pts, tgt_pts)
+		print(H)
+
+
+
 def decodeTag():
 	cap = cv2.VideoCapture('./data/Tag0.mp4')
 	# Check if camera opened successfully
@@ -137,9 +162,6 @@ def decodeTag():
 		# Capture frame-by-frame
 		ret, frame = cap.read()
 		if ret == True:
-			# Display the resulting frame
-			#cv2.imshow('Frame',frame)
-			#cv2.imwrite('test_frame.jpg',frame)
 			gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 			gray = cv2.bilateralFilter(gray_frame, 15, 75, 75)
 			ret, gray = cv2.threshold(gray_frame, 200, 255, 0)
@@ -154,12 +176,8 @@ def decodeTag():
 						squares.append(cnt)
 
 			cv2.drawContours(frame, squares, -1, (255,128,0), 3)
-			#cv2.imshow('Detected tags',frame)
-			#cv2.waitKey(0)
 
 			warped,M = four_point_transform(gray, squares[0].reshape((4,2)))
-			#cv2.imshow('tag',warped)
-			#cv2.waitKey(0)
 
 			tag_angle, tag_id = decode_tag(warped)
 			final = image_overlay(frame, squares[0].reshape((4,2)),tag_angle)
@@ -169,10 +187,8 @@ def decodeTag():
 				break # Break the loop
 		else:
 			break
-	 #When everything done, release the video capture object
 	cap.release()
-	# Closes all the frames
 	cv2.DestroyAllWindows()
 
 if __name__=='__main__':
-	superimpose():
+	superimpose()
