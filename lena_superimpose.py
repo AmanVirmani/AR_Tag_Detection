@@ -2,28 +2,40 @@ import cv2
 import numpy as np
 from collections import deque
 
+#Finding the Homography of the AR tag from World Coordinate frame to Image Coordinate frame
+def find_homography(source_pts, target_pts):
+	combined_pts = np.hstack((source_pts,target_pts))
+	A = []
+
+	for pts in combined_pts:
+		x_s = pts[0]
+		y_s = pts[1]
+		x_t = pts[2]
+		y_t = pts[3]
+
+		A_first_row = [x_t,y_t,1,0,0,0,-x_s*x_t,-x_s*y_t,-x_s]
+		A_second_row = [0,0,0,x_t,y_t,1,-y_s*x_t,-y_s*y_t,-y_s]
+		A.append(np.vstack((A_first_row,A_second_row)))
+	A = np.vstack(A)
+
+	U,S,V = np.linalg.svd(A)
+	V = V[8] # last column of V
+
+	h = V/V[8]
+
+	H = np.reshape(h,(3,3))
+
+	return H
+
 def four_point_transform(image, pts):
-	# obtain a consistent order of the points and unpack them
-	# individually
 	rect = order_points(pts)
 	(tl, tr, br, bl) = rect
-	# compute the width of the new image, which will be the
-	# maximum distance between bottom-right and bottom-left
-	# x-coordiates or the top-right and top-left x-coordinates
 	widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
 	widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
 	maxWidth = max(int(widthA), int(widthB))
-	# compute the height of the new image, which will be the
-	# maximum distance between the top-right and bottom-right
-	# y-coordinates or the top-left and bottom-left y-coordinates
 	heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
 	heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
 	maxHeight = max(int(heightA), int(heightB))
-	# now that we have the dimensions of the new image, construct
-	# the set of destination points to obtain a "birds eye view",
-	# (i.e. top-down view) of the image, again specifying points
-	# in the top-left, top-right, bottom-right, and bottom-left
-	# order
 	dst = np.array([
 		[0, 0],
 		[maxWidth - 1, 0],
@@ -32,22 +44,11 @@ def four_point_transform(image, pts):
 	# compute the perspective transform matrix and then apply it
 	M = cv2.getPerspectiveTransform(rect, dst)
 	warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
-	#lena = cv2.imread('./data/Lena.png')
-	#lena_resize = cv2.resize(lena, warped.shape)
-	#lena_warped = cv2.warpPerspective(lena_resize,np.linalg.inv(M),(maxWidth,maxHeight))
-	#cv2.imshow('test',lena_warped)
-	#cv2.waitKey(0)
 	# return the warped image
 	return warped, M
 
 def order_points(pts):
-	# initialzie a list of coordinates that will be ordered
-	# such that the first entry in the list is the top-left,
-	# the second entry is the top-right, the third is the
-	# bottom-right, and the fourth is the bottom-left
 	rect = np.zeros((4, 2), dtype = "float32")
-	# the top-left point will have the smallest sum, whereas
-	# the bottom-right point will have the largest sum
 	s = pts.sum(axis = 1)
 	rect[0] = pts[np.argmin(s)]
 	rect[2] = pts[np.argmax(s)]
@@ -63,11 +64,6 @@ def order_points(pts):
 def isWhite(tag):
 	ret, tag = cv2.threshold(tag,200,255,0)
 	count_white = cv2.countNonZero(tag)
-	#count_black_pixels = 0
-	#for i in range(tag.shape[0]):
-	#	for j in range(tag.shape[1]):
-	#		if tag[i][j] == 0 :
-	#			count_black_pixels += 1
 	return count_white > 0.9*tag.size
 
 def tagMatrix(tag):
@@ -108,54 +104,89 @@ def orientation(ar_tag):
 		print('No tag detected')
 	return orientation
 
+def image_overlay(frame,pts) :
+	lena = cv2.imread('./data/Lena.png')
+	lena = cv2.resize(lena,(200,200))
+	#cv2.imshow('lena',lena)
+	#cv2.waitKey(0)
+	pts1 = order_points(np.float32([[0,0],[200,0],[0,200],[200,200]]))
+	#pts2 = np.float32(order_points(squares[0].reshape((4,2))))
+	pts2 = np.float32(order_points(pts))
+	M = cv2.getPerspectiveTransform(pts1,pts2)
+	dst = cv2.warpPerspective(lena,M,(frame.shape[1],frame.shape[0]))
+	overlay = cv2.add(frame,dst)
+	cv2.imshow('finally',overlay)
+	cv2.waitKey(0)
 
+if __name__=='__main__':
+	cap = cv2.VideoCapture('./data/Tag0.mp4')
+	# Check if camera opened successfully
+	if (cap.isOpened()== False):
+		print("Error opening video stream or file")
 
-cap = cv2.VideoCapture('./data/Tag0.mp4')
-# Check if camera opened successfully
-if (cap.isOpened()== False):
-	print("Error opening video stream or file")
- 
-# Read until video is completed
-while(cap.isOpened()):
-	# Capture frame-by-frame
-	ret, frame = cap.read()
-	if ret == True:
-		# Display the resulting frame
-		cv2.imshow('Frame',frame)
-		cv2.imwrite('test_frame.jpg',frame)
-		gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-		gray = cv2.bilateralFilter(gray_frame, 15, 75, 75)
-		ret, gray = cv2.threshold(gray_frame, 200, 255, 0)
-		cnts, _ = cv2.findContours(gray.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-		cnts = sorted(cnts, key=cv2.contourArea,reverse=True)
-		squares=[]
-		for cnt in cnts:
-			cnt_len = cv2.arcLength(cnt, True)
-			cnt = cv2.approxPolyDP(cnt, 0.1*cnt_len, True)
-			if len(cnt) == 4:
-				if 2000 < cv2.contourArea(cnt) < 17500:
-					squares.append(cnt)
-		cv2.drawContours(gray, squares, -1, (255,128,0), 3)
-					#cv2.drawContours(frame, cnt, -1, (255,128,0), 3)
+	# Read until video is completed
+	while(cap.isOpened()):
+		# Capture frame-by-frame
+		ret, frame = cap.read()
+		if ret == True:
+			# Display the resulting frame
+			#cv2.imshow('Frame',frame)
+			#cv2.imwrite('test_frame.jpg',frame)
+			gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+			gray = cv2.bilateralFilter(gray_frame, 15, 75, 75)
+			ret, gray = cv2.threshold(gray_frame, 200, 255, 0)
+			cnts, _ = cv2.findContours(gray.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+			cnts = sorted(cnts, key=cv2.contourArea,reverse=True)
+			squares=[]
+			for cnt in cnts:
+				cnt_len = cv2.arcLength(cnt, True)
+				cnt = cv2.approxPolyDP(cnt, 0.1*cnt_len, True)
+				if len(cnt) == 4:
+					if 2000 < cv2.contourArea(cnt) < 17500:
+						squares.append(cnt)
 
-		#cv2.imshow('Frame', gray)
-		warped, M = four_point_transform(gray_frame, squares[0].reshape((4,2)))
-		cv2.namedWindow('tag', cv2.WINDOW_KEEPRATIO)
-		cv2.imshow('tag', warped)
-		cv2.waitKey(0)
-		decode_tag(warped)
-		#break
-		lena = cv2.imread('./data/Lena.png')
-		lena_resize = cv2.resize(lena, warped.shape)
-		cv2.imshow('lena', lena_resize)
-		cv2.waitKey(0)
-		break
-		# Press Q on keyboard to  exit
-		if cv2.waitKey(25) & 0xFF == ord('q'):
-			break # Break the loop
-	else:
-		break
-	# When everything done, release the video capture object
-cap.release()
-# Closes all the frames
-#cv2.DestroyAllWindows()
+			cv2.drawContours(frame, squares, -1, (255,128,0), 3)
+			cv2.imshow('Detected tags',frame)
+			cv2.waitKey(0)
+
+			warped,M = four_point_transform(gray, squares[0].reshape((4,2)))
+			cv2.imshow('tag',warped)
+			cv2.waitKey(0)
+			image_overlay(frame, squares[0].reshape((4,2)))
+
+			#H = find_homography(order_points(squares[0]), [[0,0],[199,0],[0,199],[199,199]] )
+			#H = find_homography(squares[0].reshape((4,2)), [[0,0],[199,0],[0,199],[199,199]] )
+			#warped = cv2.warpPerspective(gray_frame,H,(200,200))
+			#H_inv = np.linalg.inv(H)
+			#im_out=np.zeros((200,200))
+			#for a in range(0,200):
+			#	for b in range(0,200):
+			#		x, y, z = np.matmul(H_inv,[a,b,1])
+			#		if (int(y/z) < 1080 and int(y/z) > 0) and (int(x/z) < 1920 and int(x/z) > 0):
+			#			im_out[a][b] = gray[int(y/z)][int(x/z)]
+			#		#warped, M = four_point_transform(gray_frame, squares[0].reshape((4,2)))
+
+			cv2.namedWindow('tag', cv2.WINDOW_KEEPRATIO)
+			cv2.imshow('tag', im_out)
+			cv2.waitKey(0)
+			tag_angle, tag_id = decode_tag(warped)
+			#break
+			lena = cv2.imread('./data/Lena.png')
+			lena_resize = cv2.resize(lena, warped.shape)
+			#cv2.imshow('lena', lena_resize)
+			#cv2.waitKey(0)
+			rect = order_points(squares[0])
+			H = cv2.getPerspectiveTransform((200,200), rect)
+			lena_warped = cv2.warpPerspective(lena, H, rect)
+			#cv2.imshow('lena', lena_warped)
+			#cv2.waitKey(0)
+			break
+			# Press Q on keyboard to  exit
+			if cv2.waitKey(25) & 0xFF == ord('q'):
+				break # Break the loop
+		else:
+			break
+		# When everything done, release the video capture object
+	cap.release()
+	# Closes all the frames
+	#cv2.DestroyAllWindows()
