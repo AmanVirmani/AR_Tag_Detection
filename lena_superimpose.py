@@ -104,9 +104,15 @@ def orientation(ar_tag):
 		print('No tag detected')
 	return orientation
 
-def image_overlay(frame,pts) :
+def image_overlay(frame,pts,angle) :
 	lena = cv2.imread('./data/Lena.png')
 	lena = cv2.resize(lena,(200,200))
+	if angle == 90:
+		lena = cv2.rotate(lena, cv2.ROTATE_90_COUNTERCLOCKWISE)
+	elif angle == 180:
+		lena = cv2.rotate(lena, cv2.ROTATE_180)
+	elif angle == 270:
+		lena = cv2.rotate(lena, cv2.ROTATE_90_CLOCKWISE)
 	#cv2.imshow('lena',lena)
 	#cv2.waitKey(0)
 	pts1 = order_points(np.float32([[0,0],[200,0],[0,200],[200,200]]))
@@ -118,20 +124,9 @@ def image_overlay(frame,pts) :
 	#cv2.waitKey(0)
 	dst = cv2.warpPerspective(lena,M,(frame.shape[1],frame.shape[0]))
 	overlay = cv2.add(frame,dst)
-	cv2.imshow('finally',overlay)
-	cv2.waitKey(0)
+	return overlay
 
-def warpPerspective(src,M,dim) :
-	for col in range(dim[1]):
-		for row in range(dim[0]):
-			for ch in range(src.shape[2]):
-				[a,b,c] = np.matmul(M,[row,col,1])
-				dst[row,col,ch] = src[int(a/c),int(b/c),ch]
-
-	cv2.imshow('dst',dst)
-	cv2.waitKey(0)
-
-if __name__=='__main__':
+def decodeTag():
 	cap = cv2.VideoCapture('./data/Tag0.mp4')
 	# Check if camera opened successfully
 	if (cap.isOpened()== False):
@@ -159,46 +154,25 @@ if __name__=='__main__':
 						squares.append(cnt)
 
 			cv2.drawContours(frame, squares, -1, (255,128,0), 3)
-			cv2.imshow('Detected tags',frame)
-			cv2.waitKey(0)
+			#cv2.imshow('Detected tags',frame)
+			#cv2.waitKey(0)
 
 			warped,M = four_point_transform(gray, squares[0].reshape((4,2)))
-			cv2.imshow('tag',warped)
-			cv2.waitKey(0)
-			image_overlay(frame, squares[0].reshape((4,2)))
+			#cv2.imshow('tag',warped)
+			#cv2.waitKey(0)
 
-			H = find_homography(squares[0].reshape((4,2)), np.array([[0,0],[199,0],[0,199],[199,199]]))
-			#warped = cv2.warpPerspective(gray_frame,H,(200,200))
-			#H_inv = np.linalg.inv(H)
-			#im_out=np.zeros((200,200))
-			#for a in range(0,200):
-			#	for b in range(0,200):
-			#		x, y, z = np.matmul(H_inv,[a,b,1])
-			#		if (int(y/z) < 1080 and int(y/z) > 0) and (int(x/z) < 1920 and int(x/z) > 0):
-			#			im_out[a][b] = gray[int(y/z)][int(x/z)]
-			#		#warped, M = four_point_transform(gray_frame, squares[0].reshape((4,2)))
-
-			cv2.namedWindow('tag', cv2.WINDOW_KEEPRATIO)
-			cv2.imshow('tag', im_out)
-			cv2.waitKey(0)
 			tag_angle, tag_id = decode_tag(warped)
-			#break
-			lena = cv2.imread('./data/Lena.png')
-			lena_resize = cv2.resize(lena, warped.shape)
-			#cv2.imshow('lena', lena_resize)
-			#cv2.waitKey(0)
-			rect = order_points(squares[0])
-			H = cv2.getPerspectiveTransform((200,200), rect)
-			lena_warped = cv2.warpPerspective(lena, H, rect)
-			#cv2.imshow('lena', lena_warped)
-			#cv2.waitKey(0)
-			break
+			final = image_overlay(frame, squares[0].reshape((4,2)),tag_angle)
+			cv2.imshow('final',final)
 			# Press Q on keyboard to  exit
 			if cv2.waitKey(25) & 0xFF == ord('q'):
 				break # Break the loop
 		else:
 			break
-		# When everything done, release the video capture object
+	 #When everything done, release the video capture object
 	cap.release()
 	# Closes all the frames
-	#cv2.DestroyAllWindows()
+	cv2.DestroyAllWindows()
+
+if __name__=='__main__':
+	superimpose():
