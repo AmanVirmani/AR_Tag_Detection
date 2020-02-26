@@ -103,10 +103,9 @@ def image_overlay(frame,pts,angle) :
 	pts1 = order_points(np.float32([[0,0],[200,0],[0,200],[200,200]]))
 	#pts2 = np.float32(order_points(squares[0].reshape((4,2))))
 	pts2 = np.float32(order_points(pts))
-	M = cv2.getPerspectiveTransform(pts1,pts2)
+	M = find_homography(pts1,pts2)
+		#cv2.getPerspectiveTransform(pts1,pts2)
 	dst = warpPerspective(lena,M,(frame.shape[1],frame.shape[0]))
-	cv2.imshow('dst', dst.astype(np.uint8))
-	cv2.waitKey(0)
 	#dst = cv2.warpPerspective(lena,M,(frame.shape[1],frame.shape[0]))
 	#dst = get_warp_perspective(lena,M,(frame.shape[1],frame.shape[0]))
 	overlay = cv2.add(frame,dst)
@@ -126,7 +125,40 @@ def to_mtx(img):
 		mtr[:,i] = img[i]
 	return mtr
 
-def warpPerspective(img, M, dsize):
+def four_point_transform(image, pts):
+	# obtain a consistent order of the points and unpack them
+	# individually
+	rect = order_points(pts)
+	(tl, tr, br, bl) = rect
+	print(rect.shape)
+	# compute the width of the new image, which will be the
+	# maximum distance between bottom-right and bottom-left
+	# x-coordiates or the top-right and top-left x-coordinates
+	widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
+	widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
+	maxWidth = max(int(widthA), int(widthB))
+	# compute the height of the new image, which will be the
+	# maximum distance between the top-right and bottom-right
+	# y-coordinates or the top-left and bottom-left y-coordinates
+	heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
+	heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
+	maxHeight = max(int(heightA), int(heightB))
+	# now that we have the dimensions of the new image, construct
+	# the set of destination points to obtain a "birds eye view",
+	# (i.e. top-down view) of the image, again specifying points
+	# in the top-left, top-right, bottom-right, and bottom-left
+	# order
+	dst = np.array([
+		[0, 0],
+		[maxWidth - 1, 0],
+		[maxWidth - 1, maxHeight - 1],
+		[0, maxHeight - 1]], dtype = "float32")
+	# compute the perspective transform matrix and then apply it
+	H = find_homography(rect,dst)
+	warped = warpPerspective(image, H, (maxWidth, maxHeight))
+	return warped
+
+def warpPerspective(img, M, dsize=None):
 	mtr = to_mtx(img)
 	R,C = dsize
 	dst = np.zeros((R,C,mtr.shape[2]))
@@ -170,35 +202,39 @@ def superimpose():
 		tgt_pts = order_points(np.array([[0,0],[0,std_size],[std_size,std_size],[std_size,0]]))
 		H = find_homography(src_pts, tgt_pts)
 		print(H)
-		tag_warped = warpPerspective(frame, H, ((200,200)))
-		#tag_warped = warpPerspective(gray, H, ((200,200)))
+		tag_warped = four_point_transform(frame,src_pts)
 		cv2.imshow('tag',tag_warped)
 		cv2.waitKey(0)
 		tag_angle, tag_id = decode_tag(tag_warped)
-		lena = cv2.imread('data/Lena.png')
+		lena = cv2.imread('./data/Lena.png')
+		lena = cv2.resize(lena,(200,200))
+		if tag_angle == 90:
+			lena = cv2.rotate(lena, cv2.ROTATE_90_COUNTERCLOCKWISE)
+		elif tag_angle == 180:
+			lena = cv2.rotate(lena, cv2.ROTATE_180)
+		elif tag_angle == 270:
+			lena = cv2.rotate(lena, cv2.ROTATE_90_CLOCKWISE)
 		H_inv = np.linalg.inv(H)
 		H_inv /= H_inv[2,2]
 		dst = warpPerspective(lena,H_inv,(frame.shape[1],frame.shape[0]))
-		dst = dst.astype(np.uint8)
+		lena = dst.astype(np.uint8)
 		cv2.imshow('warp',dst)
 		cv2.waitKey(0)
 
 		mask = np.full(frame.shape, 0, dtype='uint8')
-    if lena_list != []:
-        for lena in lena_list:
-            temp = cv2.add(mask, lena.copy())
-            mask = temp
+		temp = cv2.add(mask, lena.copy())
+		mask = temp
 		lena_gray = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
-        r, lena_bin = cv2.threshold(lena_gray, 10, 255, cv2.THRESH_BINARY)
+		r, lena_bin = cv2.threshold(lena_gray, 10, 255, cv2.THRESH_BINARY)
+		mask_inv = cv2.bitwise_not(lena_bin)
+		mask_3d = frame.copy()
+		mask_3d[:, :, 0] = mask_inv
+		mask_3d[:, :, 1] = mask_inv
+		mask_3d[:, :, 2] = mask_inv
+		img_masked = cv2.bitwise_and(frame, mask_3d)
+		final_image = cv2.add(img_masked, mask)
+		cv2.imshow("Lena", final_image)
 
-        mask_inv = cv2.bitwise_not(lena_bin)
-
-        mask_3d = frame.copy()
-        mask_3d[:, :, 0] = mask_inv
-        mask_3d[:, :, 1] = mask_inv
-        mask_3d[:, :, 2] = mask_inv
-		dst = cv2.add(frame,dst)
-		cv2.imshow('warp',dst)
 		cv2.waitKey(0)
 		print('finish')
 
@@ -256,7 +292,6 @@ def decodeTag():
 			cv2.drawContours(frame, squares, -1, (255,128,0), 3)
 			for cnt in squares:
 				H = find_homography()
-			#warped,M = four_point_transform(gray, squares[0].reshape((4,2)))
 
 
 			tag_angle, tag_id = decode_tag(warped)
