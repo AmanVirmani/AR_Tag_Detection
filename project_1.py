@@ -3,7 +3,6 @@ import numpy as np
 import argparse
 from utility import *
 
-
 def main():
 	ap = argparse.ArgumentParser()
 	ap.add_argument("-q", "--question", required=False, help="Question Number to work on solution for",
@@ -16,12 +15,12 @@ def main():
 	#                default=1, nargs="*", type=int)
 	args = vars(ap.parse_args())
 
-	if args['question'] == '1' :
-		decodeTag(args['input'],args['output'])
-	elif args['question'] == '2a' :
-		lenaSuperimpose(args['input'],args['output'])
-	elif args['question'] == '2b' :
-		projectCube(args['input'],args['output'])
+	if args['question'] == '1':
+		decodeTag(args['input'], args['output'])
+	elif args['question'] == '2a':
+		lenaSuperimpose(args['input'], args['output'])
+	elif args['question'] == '2b':
+		projectCube(args['input'], args['output'])
 
 def projectCube(input,output):
 	cap = cv2.VideoCapture(input)
@@ -92,8 +91,8 @@ def projectCube(input,output):
 	cap.release()
 	cv2.destroyAllWindows()
 
-def lenaSuperimpose():
-	cap = cv2.VideoCapture('./data/Tag0.mp4')
+def lenaSuperimpose(input,output):
+	cap = cv2.VideoCapture(output)
 	# Check if camera opened successfully
 	if (cap.isOpened()== False):
 		print("Error opening video stream or file")
@@ -158,7 +157,8 @@ def lenaSuperimpose():
 			break
 	cap.release()
 	cv2.destroyAllWindows()
-	saveVideo(images)
+	if output is not None:
+		saveVideo(images,output)
 
 def decodeTag(input,output):
 	cap = cv2.VideoCapture(input)
@@ -181,16 +181,6 @@ def decodeTag(input,output):
 			squares = contour_generator(frame)
 			squares2 = contour_generator2(frame)
 
-			#cnts, _ = cv2.findContours(gray.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-			#cnts = sorted(cnts, key=cv2.contourArea,reverse=True)
-			#squares=[]
-			#for cnt in cnts:
-			#	cnt_len = cv2.arcLength(cnt, True)
-			#	cnt = cv2.approxPolyDP(cnt, 0.1*cnt_len, True)
-			#	if len(cnt) == 4:
-			#		if 2000 < cv2.contourArea(cnt) < 17500:
-			#			squares.append(cnt)
-
 			img = cv2.drawContours(frame.copy(), squares, -1, (255,128,0), 3)
 			img2 = cv2.drawContours(frame.copy(), squares2, -1, (255,128,0), 3)
 			images1.append(img)
@@ -201,8 +191,6 @@ def decodeTag(input,output):
 			std_size = 200
 			for pts in squares:
 				src_pts = order_points(pts.reshape((4,2)))
-				#tgt_pts = order_points(np.array([[0,0],[0,std_size],[std_size,std_size],[std_size,0]]))
-				#H = find_homography(src_pts, tgt_pts)
 				tag_warped = four_point_transform(gray,src_pts)
 				if tag_warped.shape[0] <= 0 or tag_warped.shape[1] <= 0:
 					print('tag not found in frame {}'.format(count))
