@@ -204,7 +204,8 @@ def projectCube():
 					final_image = cv2.add(img_masked, mask)
 
 					cv2.imshow("Lena", final_image)
-					cv2.waitKey(25)
+					cv2.waitKey(1)
+	cv2.destroyAllWindows()
 	print('done')
 
 def draw_cube(img, imgpts):  # To draw the cube
