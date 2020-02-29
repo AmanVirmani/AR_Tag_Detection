@@ -61,6 +61,8 @@ def tagMatrix(tag):
 def decode_tag(tag):
 	ar_tag = tagMatrix(tag)
 	tag_angle = orientation(ar_tag)
+	if tag_angle is None:
+		return None, None
 	tag_id = deque([ar_tag[4,3],ar_tag[4,4],ar_tag[3,4],ar_tag[3,3]])
 	tag_id.rotate(tag_angle%90)
 	return tag_angle, tag_id
@@ -242,7 +244,7 @@ def contour_generator(frame):
 			new_contour_list.append(contour)
 	final_contour_list = list()
 	for element in new_contour_list:
-		if 1000 < cv2.contourArea(element) < 17500:
+		if 1000 < cv2.contourArea(element) < 23500:
 			#if cv2.contourArea(element) < 2500:
 				final_contour_list.append(element)
 

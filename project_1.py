@@ -35,24 +35,9 @@ def projectCube(input,output):
 		print('Processing Frame No. {}'.format(count))
 		ret, frame = cap.read()
 		if ret == True:
-			h,w = frame.shape[:2]
-			h,w = int(h*s), int(w*s)
-			frame = cv2.resize(frame,(w,h))
-			gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-			gray = cv2.bilateralFilter(gray_frame, 15, 75, 75)
-			ret, gray = cv2.threshold(gray_frame, 200, 255, 0)
-			cnts, _ = cv2.findContours(gray.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-			#cnts = sorted(cnts, key=cv2.contourArea,reverse=True)
-			squares=[]
-			for cnt in cnts:
-				cnt_len = cv2.arcLength(cnt, True)
-				cnt = cv2.approxPolyDP(cnt, 0.1*cnt_len, True)
-				if len(cnt) == 4:
-					if 2000*s < cv2.contourArea(cnt) < 17500*s:
-						squares.append(cnt)
-
 			std_size = 200
 			cube_list = []
+			squares = contour_generator(frame)
 			for pts in squares:
 				src_pts = order_points(pts.reshape((4,2)))
 				tgt_pts = order_points(np.array([[0,0],[0,std_size],[std_size,std_size],[std_size,0]]))
@@ -80,7 +65,7 @@ def projectCube(input,output):
 					img_masked = cv2.bitwise_and(frame, mask_3d)
 					final_image = cv2.add(img_masked, mask)
 					images.append(final_image)
-					cv2.imshow("Lena", final_image)
+					#cv2.imshow("Lena", final_image)
 					if cv2.waitKey(1) & 0xFF == ord('q'):
 						break # Break the loop
 		else:
@@ -92,7 +77,7 @@ def projectCube(input,output):
 	cv2.destroyAllWindows()
 
 def lenaSuperimpose(input,output):
-	cap = cv2.VideoCapture(output)
+	cap = cv2.VideoCapture(input)
 	# Check if camera opened successfully
 	if (cap.isOpened()== False):
 		print("Error opening video stream or file")
@@ -101,23 +86,12 @@ def lenaSuperimpose(input,output):
 	# Read until video is completed
 	while(cap.isOpened()):
 		count +=1
+		print('Processing Frame No. {}'.format(count))
 		# Capture frame-by-frame
 		ret, frame = cap.read()
 		if ret == True:
-			gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-			gray = cv2.bilateralFilter(gray_frame, 15, 75, 75)
-			ret, gray = cv2.threshold(gray_frame, 200, 255, 0)
-			cnts, _ = cv2.findContours(gray.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-			cnts = sorted(cnts, key=cv2.contourArea,reverse=True)
-			squares=[]
-			for cnt in cnts:
-				cnt_len = cv2.arcLength(cnt, True)
-				cnt = cv2.approxPolyDP(cnt, 0.1*cnt_len, True)
-				if len(cnt) == 4:
-					if 2000 < cv2.contourArea(cnt) < 17500:
-						squares.append(cnt)
-
 			std_size = 200
+			squares = contour_generator(frame)
 			for pts in squares:
 				src_pts = order_points(pts.reshape((4,2)))
 				tgt_pts = order_points(np.array([[0,0],[0,std_size],[std_size,std_size],[std_size,0]]))
@@ -150,7 +124,7 @@ def lenaSuperimpose(input,output):
 			img_masked = cv2.bitwise_and(frame, mask_3d)
 			final_image = cv2.add(img_masked, mask)
 			images.append(final_image)
-			cv2.imshow("Lena_%d.png"%count, final_image)
+			#cv2.imshow("Lena_%d.png"%count, final_image)
 			if cv2.waitKey(1) & 0xFF == ord('q'):
 				break # Break the loop
 		else:
@@ -175,39 +149,37 @@ def decodeTag(input,output):
 		# Capture frame-by-frame
 		ret, frame = cap.read()
 		if ret == True:
-			#gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-			#gray = cv2.bilateralFilter(gray_frame, 15, 75, 75)
-			#ret, gray = cv2.threshold(gray, 200, 255, 0)
+			gray = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
 			squares = contour_generator(frame)
-			squares2 = contour_generator2(frame)
 
 			img = cv2.drawContours(frame.copy(), squares, -1, (255,128,0), 3)
-			img2 = cv2.drawContours(frame.copy(), squares2, -1, (255,128,0), 3)
 			images1.append(img)
-			images2.append(img2)
-			#cv2.imshow('frame', img)
-			#cv2.waitKey(0)
-			continue
-			std_size = 200
+			#continue
 			for pts in squares:
 				src_pts = order_points(pts.reshape((4,2)))
-				tag_warped = four_point_transform(gray,src_pts)
+				tag_warped = four_point_transform(frame,src_pts)
 				if tag_warped.shape[0] <= 0 or tag_warped.shape[1] <= 0:
 					print('tag not found in frame {}'.format(count))
 					continue
-				cv2.imshow('tag',tag_warped)
-				cv2.waitKey(0)
 				tag_angle, tag_id = decode_tag(tag_warped)
 				if tag_angle is None:
 					continue
 				print('tag angle : {} degrees'.format(tag_angle))
 				print('tag id : {}'.format(np.array(tag_id,dtype=int)))
+				final_image = cv2.putText(img,'Tag_id '+str(np.array(tag_id)),
+										  (pts[0][0][0],pts[0][0][1]), cv2.FONT_HERSHEY_COMPLEX,1,(0,0,255),2,cv2.LINE_AA)
+				final_image = cv2.putText(img,'Tag_angle '+ str(tag_angle)+' degrees',
+										  (pts[0][0][0], pts[0][0][1]+50), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255), 2,
+										  cv2.LINE_AA)
+				cv2.imwrite('data/tagid_{}.jpg'.format(count), final_image)
+				#cv2.imshow('e',final_image);cv2.waitKey(0);cv2.destroyAllWindows()
+				#break
 		else:
 			break
 	cap.release()
 	cv2.destroyAllWindows()
-	saveVideo(images1,'data/sanchit.avi')
-	saveVideo(images2,'data/aman.avi')
+	#if output is not None:
+	#	saveVideo(images1,output)
 
 if __name__=='__main__':
 	main()
