@@ -1,5 +1,9 @@
 # AR_Tag_Detection
+[![Build Status](https://travis-ci.org/AmanVirmani/AR_Tag_Detection.svg?branch=master)](https://travis-ci.org/AmanVirmani/AR_Tag_Detection)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 This project achieves three tasks: 
+
 
 1. AR Tag Detection and Decoding (Task: 1)
 
